@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- soldering iron handle (grey), diagonal -->
+    <path
+        android:fillColor="#c7ccd1"
+        android:pathData="M70.5,37.5 L78,45 L58,65 L50.5,57.5 Z" />
+    <!-- barrel -->
+    <path
+        android:fillColor="#8b9198"
+        android:pathData="M58,65 L50.5,57.5 L40,68 L47.5,75.5 Z" />
+    <!-- hot tip (green) -->
+    <path
+        android:fillColor="#30d158"
+        android:pathData="M47.5,75.5 L40,68 L30,78 L37.5,85.5 Z" />
+    <!-- heat glow dot -->
+    <path
+        android:fillColor="#30d158"
+        android:pathData="M31,74 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+</vector>

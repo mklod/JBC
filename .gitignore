@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Android build artifacts / machine-specific
+android/out/
+android/build/
+android/app/build/
+android/.gradle/
+.gradle/
+local.properties
+*.apk
+*.iml
+
+# Personal purchase records / shopping screenshots — NOT for a public repo
+*.pdf
+archive/
+2026-07-01*.png
+2026-07-02*.png
+*Order Confirmation*
+*Checkout*
+Gram 1 LLC*
+
+# macOS
+.DS_Store
