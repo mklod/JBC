@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Build the JBC B·IRON Android app and (optionally) install it.
+# Last modified: 2026-07-24--1429
 #
 # Gradle can't build directly on the SMB/NAS path, so this mirrors the source
 # to a local dir, builds there with the Android Studio JBR (JDK 21), copies the
@@ -10,10 +11,10 @@
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
-BUILD="$HOME/Developer/jbc-android-build"
-GRADLE="$HOME/Developer/tools/gradle-8.11.1/bin/gradle"
+BUILD="$HOME/builds/jbc-android"
+GRADLE="$HOME/builds/tools/gradle-8.11.1/bin/gradle"
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-export GRADLE_USER_HOME="$HOME/Developer/.gradle-home"
+export GRADLE_USER_HOME="$HOME/builds/.gradle-home"
 SDK="$HOME/Library/Android/sdk"
 
 mkdir -p "$BUILD"

@@ -16,18 +16,22 @@ parameter-locked over BLE.
 
 ## Where things are
 
-- **Docs (canonical):** `L:\PROJECTS\JBC` = `~/nas/murky/PROJECTS/JBC`
-  (SMB share `murky`, automounts on access — see the
-  `project-murkyserver-nas-automount` memory). Files: `README.md`, `PROTOCOL.md`,
-  `REVERSE-ENGINEERING.md`, `jbc_biron.py`, `requirements.txt`, this file.
-- **Runnable working copy:** `~/Developer/jbc-biron-ble/` — same `jbc_biron.py`
-  plus a `venv/` with `bleak` already installed. Run from here, not the NAS
-  (venvs on SMB are flaky; NAS paths also can't be used for gradle builds).
+- **Project home (canonical, git):** `L:\PROJECTS\JBC` = `~/nas/drop/PROJECTS/JBC`
+  (SMB share `drop`, automounts on access — see the
+  `project-murkyserver-nas-automount` memory). Repo `mklod/JBC`. Files:
+  `README.md`, `PROTOCOL.md`, `REVERSE-ENGINEERING.md`, `jbc_biron.py`,
+  `requirements.txt`, `android/`, this file. CC sessions start HERE.
+- **Python controller:** run `jbc_biron.py` from this folder with the local venv
+  `~/builds/jbc-ble/venv` (venvs on SMB are flaky — keep the venv local;
+  recreate anytime: `python3 -m venv ~/builds/jbc-ble/venv &&
+  ~/builds/jbc-ble/venv/bin/pip install bleak`). The old
+  `~/Developer/jbc-biron-ble/` copy was a stale snapshot — deleted 2026-07-24.
 - **Native Android app:** `L:\PROJECTS\JBC\android` (source, Kotlin/Compose,
   package `dev.mklod.jbcbiron`). Gradle can't build on SMB, so `android/build.sh`
-  mirrors to `~/Developer/jbc-android-build` and builds with the Android Studio
-  JBR **JDK 21** (brew OpenJDK 26 is too new for AGP); pinned Gradle 8.11.1 /
-  AGP 8.7.3 / Kotlin 2.0.21 / compileSdk 35 / minSdk 28. APK in `android/out/`.
+  mirrors to `~/builds/jbc-android` and builds with the Android Studio
+  JBR **JDK 21** (brew OpenJDK 26 is too new for AGP); pinned Gradle 8.11.1
+  (`~/builds/tools/`) / AGP 8.7.3 / Kotlin 2.0.21 / compileSdk 35 / minSdk 28.
+  APK in `android/out/`.
 - **Decompiled app source (if you need to re-check the protocol):** was produced
   under the session scratchpad with `jadx -d jadx-out JBCBiron-v2.0.2.apk`; the
   APK came from `https://www.jbctools.com/software/BIRON/JBCBiron-v2.0.2.apk`.
