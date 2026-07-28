@@ -14,6 +14,15 @@ official app:
 Protocol is fully reverse-engineered and live-verified. All three surfaces share
 the same command set + status-frame parsing.
 
+## Last session — 2026-07-27--1753 (Mac CC)
+- **Fixed the screen-off scan bug** (Windows-reported): app came back "offline",
+  toggle unresponsive because the unfiltered `startScan()` (once in `onCreate`)
+  is suspended on screen-off and never resumes. Fix: **lifecycle-aware scan**
+  (`onStart` re-arms scan+reconnect, `onStop` stops + drops links) + a
+  **filtered scan** (service-UUID + per-known-address) + reconnect-known-by-address.
+- Built + installed + verified on the Moto X4: screen off → both drop; screen on
+  → both reconnect in ~5 s. Committed + pushed to github.com/mklod/JBC.
+
 ## Last session — 2026-07-24--1400 (Mac CC)
 - Android hardening: **persistent static cards** (SharedPreferences; a card is never
   removed — shows "offline"/last-known when dropped, and both show on cold launch).

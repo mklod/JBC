@@ -9,8 +9,11 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
 import android.content.Context
+import android.os.ParcelUuid
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -62,6 +65,8 @@ class BleManager(private val context: Context) {
 
     val bluetoothEnabled: Boolean get() = adapter?.isEnabled == true
 
+    @Volatile private var scanning = false
+
     init {
         // Pre-create a card for every iron we've ever seen, so both cards show
         // immediately (offline) on launch — before scanning finds anything.
@@ -73,20 +78,24 @@ class BleManager(private val context: Context) {
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
-            val name = result.scanRecord?.deviceName ?: result.device.name ?: return
-            if (!name.startsWith(NAME_PREFIX)) return
             val addr = result.device.address
             val existing = conns[addr]
-            if (existing == null) {
-                val conn = IronConn(context, scope, result.device, name) { publish() }
-                if (conns.putIfAbsent(addr, conn) == null) {
-                    Log.d(TAG, "new iron $name ($addr)")
-                    saveKnown(addr, name)
-                    conn.connect()
-                    publish()
-                }
-            } else {
-                existing.ensureConnected()   // known handle re-appeared
+            if (existing != null) {
+                // Known iron re-appeared (matched by address filter — the name may
+                // be absent in a filtered result, so don't gate on it). Reconnect
+                // if its link is down.
+                existing.ensureConnected()
+                return
+            }
+            // New device: confirm it's a JBC handle by advertised name.
+            val name = result.scanRecord?.deviceName ?: result.device.name ?: return
+            if (!name.startsWith(NAME_PREFIX)) return
+            val conn = IronConn(context, scope, result.device, name) { publish() }
+            if (conns.putIfAbsent(addr, conn) == null) {
+                Log.d(TAG, "new iron $name ($addr)")
+                saveKnown(addr, name)
+                conn.connect()
+                publish()
             }
         }
 
@@ -95,14 +104,45 @@ class BleManager(private val context: Context) {
         }
     }
 
+    /**
+     * Start scanning. Call from the Activity's onStart (screen-on / foreground):
+     * Android suspends BLE scans on screen-off and does NOT auto-resume, so the
+     * scan must be re-armed each time the app comes forward. Idempotent.
+     */
     fun start() {
         publish()   // show every known iron's (offline) card immediately
-        // Connections are driven by scan sightings (below): we connect a handle
-        // only when we see it advertising, so the initial connect is fast.
-        adapter?.bluetoothLeScanner?.startScan(scanCallback)
+        val scanner = adapter?.bluetoothLeScanner ?: return
+        if (scanning) return
+        scanning = true
+        // Filtered scans survive/behave better than unfiltered ones. Match the
+        // service UUID plus each known iron by address (covers handles that don't
+        // advertise the service UUID). Fresh install (no known irons) → unfiltered
+        // so a brand-new handle can still be discovered by name.
+        val filters: List<ScanFilter>? = if (conns.isEmpty()) null else {
+            val fs = mutableListOf<ScanFilter>()
+            fs.add(ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE_UUID)).build())
+            for (addr in conns.keys) {
+                try { fs.add(ScanFilter.Builder().setDeviceAddress(addr).build()) } catch (_: Exception) {}
+            }
+            fs
+        }
+        val settings = ScanSettings.Builder()
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .build()
+        try {
+            if (filters == null) scanner.startScan(scanCallback)
+            else scanner.startScan(filters, settings, scanCallback)
+        } catch (e: Exception) {
+            Log.e(TAG, "startScan failed", e); scanning = false
+        }
     }
 
+    /**
+     * Stop scanning and drop the links. Call from onStop (screen-off / background)
+     * — this also frees the irons' battery (no 24/7 connections).
+     */
     fun stop() {
+        scanning = false
         try {
             adapter?.bluetoothLeScanner?.stopScan(scanCallback)
         } catch (_: Exception) {

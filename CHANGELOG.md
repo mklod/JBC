@@ -2,10 +2,23 @@
 
 ## TODO
 > [!tip] Queued for next build
+> - **Android BUG (high): scanner dies on screen-off, never resumes → both cards go "offline" and toggle is disabled after the phone sleeps.** Fix: lifecycle-aware scan (restart on onStart/onResume) + add a ScanFilter + reconnect dead persistent conns. Full diagnosis in `android/STATUS.md` (2026-07-24 afternoon). Workaround: reopen the app.
 > - Battery-% calibration: cross-check derived % against the official app at a known voltage; tune the SOC curve in `jbc_biron.py` / `Model.kt`.
 > - Confirm `<D{n}>` sleep-delay unit, then add a settable inactivity-timeout control.
 > - Android: landscape layout; reactive Bluetooth-on state; revert toggle on actual write failure (not just timeout).
 > - Optional: WORK-state HCI capture while soldering to decode remaining fields 6/9/13/16.
+
+## Build 2026-07-27--1753 — Mac CC: fix scanner dies on screen-off (won't reconnect)
+### Changes
+- **Fixed the "come back, both cards offline, toggle won't respond" bug** (Windows-reported). Root cause: `startScan()` ran once in `onCreate` with no filter; Android suspends unfiltered BLE scans on screen-off and never auto-resumes.
+- **Lifecycle-aware scanning:** scan start/stop moved to `onStart`/`onStop` — screen-on re-arms the scan (and reconnects), screen-off stops it and drops the links (saves the iron packs).
+- **Filtered scan:** service-UUID + per-known-address `ScanFilter`s (fresh install → unfiltered by name). Known irons now reconnect **by address** even if a filtered result has no name.
+- Verified on the Moto X4: launch → both connect; **screen off → drop; screen on → both reconnect in ~5 s.**
+> [!warning] Testing Checklist
+> - [x] Screen-off drops links, screen-on re-scans and reconnects both (~5 s)
+> - [x] Both cards still connect on cold launch (filtered scan)
+> - [ ] Confirm a brand-new (unknown) handle is still discovered on fresh install
+>   - Notes: unfiltered fallback when no known irons — untested with a 3rd handle
 
 ## Build 2026-07-24--1400 — Mac CC: persistent cards, stable reconnect, badge fix, git
 ### Changes

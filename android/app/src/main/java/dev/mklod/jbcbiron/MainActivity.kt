@@ -18,15 +18,19 @@ import dev.mklod.jbcbiron.ui.JbcTheme
 class MainActivity : ComponentActivity() {
 
     private lateinit var ble: BleManager
+    @Volatile private var permsReady = false
 
     private val permLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-            if (result.values.all { it }) ensureBluetoothThenStart()
+            if (result.values.all { it }) {
+                permsReady = true
+                ensureBluetoothThenScan()
+            }
         }
 
     private val enableBtLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            ble.start()
+            startScanIfReady()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,7 +49,26 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        requestPermsThenStart()
+        val missing = requiredPerms().filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isEmpty()) permsReady = true
+        else permLauncher.launch(missing.toTypedArray())
+        // Actual scanning is driven by onStart (below).
+    }
+
+    // Re-arm scanning every time the app comes to the foreground / screen-on —
+    // Android suspends BLE scans on screen-off and never auto-resumes.
+    override fun onStart() {
+        super.onStart()
+        ensureBluetoothThenScan()
+    }
+
+    // Stop scanning + drop links when backgrounded — fixes the "won't reconnect"
+    // bug's other half and saves the irons' battery.
+    override fun onStop() {
+        super.onStop()
+        ble.stop()
     }
 
     private fun requiredPerms(): Array<String> =
@@ -55,24 +78,13 @@ class MainActivity : ComponentActivity() {
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
         }
 
-    private fun requestPermsThenStart() {
-        val missing = requiredPerms().filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (missing.isEmpty()) ensureBluetoothThenStart()
-        else permLauncher.launch(missing.toTypedArray())
+    private fun ensureBluetoothThenScan() {
+        if (!permsReady) return
+        if (ble.bluetoothEnabled) startScanIfReady()
+        else enableBtLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
     }
 
-    private fun ensureBluetoothThenStart() {
-        if (ble.bluetoothEnabled) {
-            ble.start()
-        } else {
-            enableBtLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        ble.stop()
+    private fun startScanIfReady() {
+        if (permsReady && ble.bluetoothEnabled) ble.start()
     }
 }

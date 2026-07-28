@@ -5,6 +5,72 @@ the build toolchain (`build.sh`); the Windows box has the irons + web dashboard.
 
 ---
 
+## 2026-07-27 — Mac CC: scan-lifecycle fix — screen-off bug FIXED + verified
+
+Fixed the scanner-dies-on-screen-off bug from the Windows entry below. Built,
+installed, and verified on the Moto X4 over adb.
+
+- **Lifecycle-aware scan (`MainActivity`).** Scan start/stop moved to
+  `onStart`/`onStop`. Screen-on / foreground re-arms `ble.start()`; screen-off /
+  background calls `ble.stop()` (stops scan + closes links — also spares the iron
+  packs). Permission / BT-enable gate scanning via a `permsReady` flag; `onStart`
+  is the single entry point that (re)starts scanning.
+- **ScanFilter (`Ble.kt`).** `start()` is now idempotent and uses a **filtered**
+  scan: service-UUID + one filter per known address (from prefs). A fresh install
+  with no known irons falls back to an unfiltered scan so a new handle is still
+  discovered by name. Filtered scans are also less aggressively suspended.
+- **Reconnect known-by-address.** `onScanResult` reconnects a known iron by
+  address even when a filtered result carries no name (the old name-gate could
+  skip it); the name check now applies only to brand-new devices.
+
+Verified live: launch → both connect; **screen OFF → both drop (`reason=22`
+local close via `onStop`); screen ON → `onStart` re-scans → both reconnect in
+~5 s** and the app is usable again — the "turn screen on, want it to work" flow.
+
+---
+
+## 2026-07-24 (afternoon) — Windows CC: BUG — scan dies on screen-off, no resume
+
+**Symptom (user):** came back to desk, turned the phone screen on → **both cards
+"offline", toggle won't respond.**
+
+**Diagnosed live over adb (Moto X4 attached to the Windows box):**
+- App process alive (not killed), screen Awake, Doze ACTIVE. App is **NOT** in the
+  Doze battery-optimization whitelist.
+- Both irons advertising **strongly right next to the phone** (Windows scan: Std
+  −36 dBm, NANO −29 dBm) → **not** an iron-side / signal / deep-sleep problem.
+- App produced **zero scan/connect activity** while both irons advertised → the
+  app's BLE **scanner is dead** and never restarts.
+- `am force-stop` + relaunch → both reconnect in ~seconds (verified by screenshot).
+  So it's purely the scanner not resuming; connect/parse path is fine.
+
+**Root cause:** `BleManager.start()` calls `startScan()` **once in onCreate** with
+**no ScanFilter**. Android suspends *unfiltered* BLE scans when the screen turns
+off (documented since 8.1) and does **not** auto-resume on screen-on. With the
+screen off the app was also Doze-frozen. Net: scan stops, never restarts →
+persistent cards stay "offline" → `AppleToggle(enabled = iron.connected)` is
+**disabled while offline**, which is exactly the "won't toggle on" report.
+
+**Immediate workaround (told the user):** reopen the app (swipe away + relaunch)
+→ fresh scan → both reconnect in a few seconds. (I already force-restarted it via
+adb this session, so it's live again now.)
+
+**Proper fix — for the next Mac build (priority):**
+1. **Lifecycle-aware scan.** Move scan start/stop into `onStart`/`onStop` (or a
+   `DefaultLifecycleObserver`) so screen-on / app-foreground **re-triggers the
+   scan**. This is the key fix — matches the usage ("turn screen on, want it to
+   work"). Stopping on background also saves the irons' battery (no 24/7 links).
+2. **Add a ScanFilter** (service UUID `2bbe5a4a-…` or name `JBC_`). Filtered scans
+   are handled far better than unfiltered ones and are less aggressively suspended.
+3. **Reconnect persistent-but-dead conns.** Ensure `onScanResult` reconnects a
+   conn whose GATT is dead/disconnected — don't early-return just because the addr
+   is still in the (never-removed) map.
+4. Optional (only if background/screen-off control is wanted, at a battery cost):
+   `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` and/or a foreground service. NOT
+   recommended by default — keeping two BLE links alive drains the iron packs.
+
+---
+
 ## 2026-07-23 (evening) — Mac CC: persistent static cards + autoConnect
 
 User: "both cards ALWAYS visible, static, never a single card, ever." The
