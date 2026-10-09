@@ -21,7 +21,7 @@ Each iron accepts only ONE BLE connection at a time: close the phone app first.
 A handle that is OFF and out of its cradle stops advertising and won't appear
 until it's docked or woken.
 """
-# Last modified: 2026-10-09--0113
+# Last modified: 2026-10-09--0119
 import argparse
 import asyncio
 import json
@@ -33,7 +33,7 @@ from urllib.parse import urlparse, parse_qs
 
 from bleak import BleakClient
 
-from jbc_biron import find_all_irons, parse_status, WRITE_CHAR, NOTIFY_CHAR
+from jbc_biron import find_all_irons, parse_status, TipTrace, WRITE_CHAR, NOTIFY_CHAR
 
 PORT = 8770
 HISTORY_SECONDS = 300
@@ -95,20 +95,22 @@ async def device_loop(dev, name):
             try:
                 async with BleakClient(dev) as client:
                     sender = Sender(client)
+                    trace = TipTrace()
 
                     def on_notify(_c, data: bytearray):
                         text = data.decode("utf-8", "replace").strip()
                         log_raw(addr, name, text)
                         if text.startswith("E"):
                             st = parse_status(text)
+                            now = time.time()
+                            # Graph only clean samples: no tip-swap artifact
+                            # (above setpoint / slewing), idle flicker held flat.
+                            v = trace.sample(now, st)
                             with _lock:
                                 rec = _devices[addr]
                                 rec["last"] = st
-                                # Only graph a trustworthy tip reading — a
-                                # cartridge swap opens the thermocouple (~1100 °C
-                                # rail value) and would spike the chart.
-                                if st and st.get("tip_valid"):
-                                    rec["history"].append((time.time(), st["current_c"]))
+                                if v is not None:
+                                    rec["history"].append((now, v))
 
                     await client.start_notify(NOTIFY_CHAR, on_notify)
                     with _lock:

@@ -1,5 +1,5 @@
 package dev.mklod.jbcbiron
-// Last modified: 2026-10-09--0107
+// Last modified: 2026-10-09--0119
 
 /**
  * JBC B·IRON status frame parsing — a direct port of the live-verified
@@ -22,10 +22,22 @@ val STATUS = mapOf(
     8 to "OFF", 9 to "OFF", 10 to "COVER",
 )
 
-// Pulling the cartridge (or a bad re-seat during a tip swap) opens the tip
-// thermocouple, which reads a rail value (~1100 °C). The work range tops out at
-// 450 °C, so anything above this is a sensor artifact — kept off the live graph.
-const val TIP_MAX_PLAUSIBLE_C = 500
+// Tip-reading sanity limits — 1:1 with jbc_biron.py, from a live tip-swap capture
+// (../captures/2026-10-09-tipswap.tsv). Pulling/re-seating a cartridge opens the
+// tip thermocouple (rail ~1100-1600 °C) and the firmware SLEWS its reported
+// reading toward/away from that rail at ~1000 °C/s, so for a few frames the junk
+// lands anywhere between real and rail (618, 1551, 1185, 822, 465 … seen live).
+//
+// The tip can't legitimately exceed its setpoint, bar a little regulator
+// overshoot (351 seen at a 350 setpoint).
+const val TIP_OVERSHOOT_C = 10
+// Real heat-up peaks ~160 °C/s; the artifact slew is ~1000 °C/s.
+const val TIP_MAX_SLEW_C_PER_S = 500
+// Idle readings flicker by ±1 °C (26/27/28 at room temp). The graph holds its
+// value until the reading moves at least this far, so idle and at-setpoint lines
+// plot flat; at heat-up rates (~20 °C/frame) the lag is invisible.
+const val TIP_DEADBAND_C = 3
+const val FALLBACK_MAX_C = 450   // work-range top, if the frame lacks a setpoint
 
 // Everything except a literal OFF counts as "on" for the master toggle.
 private val OFF_STATES = setOf("OFF")
@@ -40,8 +52,9 @@ data class IronStatus(
     val countdownS: Int?,
     val status: String,
     val locked: Boolean,
-    // Is the tip reading trustworthy for the graph? False during a cartridge
-    // swap (open thermocouple → rail value, and/or NO CARTRIDGE status).
+    // Is this single frame's tip reading plausible? False above setpoint (+
+    // overshoot) or with NO CARTRIDGE. The slew tail of a swap needs history —
+    // see TipTrace.
     val tipValid: Boolean,
 ) {
     val isOn: Boolean get() = status !in OFF_STATES
@@ -85,17 +98,51 @@ fun parseStatus(text: String): IronStatus? {
     val battRaw = num(1)
     val battV = battRaw?.let { it / 100.0 }
     val current = num(2)
+    val setpoint = num(5)
+    val maxC = num(17)
     val status = STATUS[num(3)] ?: "?"
+    val ceiling = (setpoint?.takeIf { it > 0 } ?: maxC?.takeIf { it > 0 } ?: FALLBACK_MAX_C) +
+        TIP_OVERSHOOT_C
     return IronStatus(
         currentC = current,
-        setpointC = num(5),
-        maxC = num(17),
+        setpointC = setpoint,
+        maxC = maxC,
         sleepDelay = num(7),
         batteryV = battV,
         batteryPct = batteryPctFromVoltage(battV),
         countdownS = num(10)?.let { it / 4 },
         status = status,
         locked = f.getOrNull(12) == "1",
-        tipValid = current != null && current <= TIP_MAX_PLAUSIBLE_C && status != "NO CARTRIDGE",
+        tipValid = current != null && current <= ceiling && status != "NO CARTRIDGE",
     )
+}
+
+/**
+ * Per-iron filter turning status frames into clean graph samples (port of
+ * jbc_biron.py TipTrace). [sample] returns the °C value to plot, or null to skip
+ * the frame: drops implausible frames ([IronStatus.tipValid]), drops the
+ * firmware's artifact slew (faster than [TIP_MAX_SLEW_C_PER_S] vs the previous
+ * raw frame, valid or not), then holds the value inside [TIP_DEADBAND_C] so idle
+ * noise plots flat.
+ */
+class TipTrace {
+    private var prevT = 0L          // epoch ms of the previous frame
+    private var prevRaw: Int? = null
+    private var held: Int? = null   // last plotted value
+
+    fun sample(tMillis: Long, st: IronStatus): Int? {
+        val raw = st.currentC ?: return null
+        val pRaw = prevRaw
+        val pT = prevT
+        prevRaw = raw
+        prevT = tMillis
+        if (!st.tipValid) return null
+        if (pRaw != null) {
+            val dtS = maxOf(tMillis - pT, 100L) / 1000.0
+            if (Math.abs(raw - pRaw) / dtS > TIP_MAX_SLEW_C_PER_S) return null
+        }
+        val h = held
+        if (h == null || Math.abs(raw - h) >= TIP_DEADBAND_C) held = raw
+        return held
+    }
 }

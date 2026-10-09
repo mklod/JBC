@@ -12,7 +12,7 @@ Cross-platform via bleak (macOS/Linux/Windows).
     python jbc_biron.py on
     python jbc_biron.py off
 """
-# Last modified: 2026-10-09--0054
+# Last modified: 2026-10-09--0119
 import asyncio
 import sys
 
@@ -72,11 +72,23 @@ def battery_pct_from_voltage(pack_v):
     return 100
 
 
-# Pulling the cartridge (or a bad re-seat during a tip swap) opens the tip
-# thermocouple, which reads a rail value (~1100 °C). The iron's work range tops
-# out at 450 °C, so any reading above this ceiling is a sensor artifact, not a
-# real temperature — callers drop it from the live graph so it doesn't spike.
-TIP_MAX_PLAUSIBLE_C = 500
+# Tip-reading sanity limits, from a live tip-swap capture
+# (captures/2026-10-09-tipswap.tsv). Pulling/re-seating a cartridge opens the
+# tip thermocouple (rail ~1100-1600 °C), and the firmware SLEWS its reported
+# reading toward/away from that rail at ~1000 °C/s, so for a few frames the junk
+# lands anywhere between the real temperature and the rail (618, 1551, 1185,
+# 822, 465 … seen live).
+#
+# The tip can't legitimately exceed its setpoint, bar a little regulator
+# overshoot (351 seen at a 350 setpoint).
+TIP_OVERSHOOT_C = 10
+# Real heat-up peaks ~160 °C/s; the artifact slew is ~1000 °C/s.
+TIP_MAX_SLEW_C_PER_S = 500
+# Idle readings flicker by ±1 °C (26/27/28 at room temp). The graph holds its
+# value until the reading moves at least this far, so idle and at-setpoint
+# lines plot flat; at heat-up rates (~20 °C/frame) the lag is invisible.
+TIP_DEADBAND_C = 3
+FALLBACK_MAX_C = 450           # work-range top, if the frame lacks a setpoint
 
 
 def parse_status(text):
@@ -95,17 +107,20 @@ def parse_status(text):
     # voltage in centivolts (8.38 V docked/full).
     batt = num(1)
     current = num(2)
+    setpoint = num(5)
     status = STATUS.get(num(3), f"?{f[3] if len(f) > 3 else ''}")
-    # Is the tip reading trustworthy for the graph? False during a cartridge
-    # swap (open thermocouple → rail value, and/or NO CARTRIDGE status).
+    # Is this single frame's tip reading plausible? False above setpoint (+
+    # overshoot) or with NO CARTRIDGE. The slew tail of a swap needs history —
+    # see TipTrace.
+    ceiling = (setpoint or num(17) or FALLBACK_MAX_C) + TIP_OVERSHOOT_C
     tip_valid = (
         current is not None
-        and current <= TIP_MAX_PLAUSIBLE_C
+        and current <= ceiling
         and status != "NO CARTRIDGE"
     )
     return {
         "current_c": current,
-        "setpoint_c": num(5),
+        "setpoint_c": setpoint,
         "max_c": num(17),          # confirmed via <I450> (HCI capture)
         "sleep_delay": num(7),     # confirmed via <D20>/<D48> (HCI capture)
         "battery_v": batt / 100 if batt is not None else None,
@@ -117,6 +132,36 @@ def parse_status(text):
         "tip_valid": tip_valid,
         "locked": len(f) > 12 and f[12] == "1",
     }
+
+
+class TipTrace:
+    """Per-iron filter turning status frames into clean graph samples.
+
+    sample() returns the °C value to plot, or None to skip the frame. It drops
+    implausible frames (parse_status tip_valid), drops the firmware's artifact
+    slew (moving faster than TIP_MAX_SLEW_C_PER_S vs the previous raw frame,
+    valid or not), then holds the value inside TIP_DEADBAND_C so idle noise
+    plots flat.
+    """
+
+    def __init__(self):
+        self._prev = None      # (t, raw tip °C) of the previous frame
+        self._held = None      # last plotted value
+
+    def sample(self, t, st):
+        raw = st.get("current_c") if st else None
+        if raw is None:
+            return None
+        prev, self._prev = self._prev, (t, raw)
+        if not st["tip_valid"]:
+            return None
+        if prev is not None:
+            dt = max(t - prev[0], 0.1)
+            if abs(raw - prev[1]) / dt > TIP_MAX_SLEW_C_PER_S:
+                return None
+        if self._held is None or abs(raw - self._held) >= TIP_DEADBAND_C:
+            self._held = raw
+        return self._held
 
 
 class Iron:

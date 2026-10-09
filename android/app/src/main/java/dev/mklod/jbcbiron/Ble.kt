@@ -1,5 +1,5 @@
 package dev.mklod.jbcbiron
-// Last modified: 2026-10-09--0107
+// Last modified: 2026-10-09--0119
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
@@ -191,6 +191,7 @@ private class IronConn(
     @Volatile var connected = false
     @Volatile private var status: IronStatus? = null   // last-known; retained while offline
     private val history = ArrayDeque<Pair<Long, Int>>()
+    private val trace = TipTrace()   // fed only from onCharacteristicChanged (serial)
 
     private var gatt: BluetoothGatt? = null
     private var writeChar: BluetoothGattCharacteristic? = null
@@ -268,12 +269,12 @@ private class IronConn(
             if (!text.startsWith("E")) return
             val st = parseStatus(text) ?: return
             status = st
-            // Only graph a trustworthy tip reading — a cartridge swap opens the
-            // thermocouple (~1100 °C rail value) and would spike the chart.
-            val tip = st.currentC
-            if (st.tipValid && tip != null) {
+            // Graph only clean samples: no tip-swap artifact (above setpoint /
+            // slewing), idle flicker held flat.
+            val now = System.currentTimeMillis()
+            val tip = trace.sample(now, st)
+            if (tip != null) {
                 synchronized(history) {
-                    val now = System.currentTimeMillis()
                     history.addLast(now to tip)
                     while (history.isNotEmpty() && now - history.first().first > HISTORY_MS) {
                         history.removeFirst()

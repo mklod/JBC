@@ -86,7 +86,7 @@ E;810;52;5;0;350;4;40;0;1200;828;253;0;0;100;0;5;400;100;    (60 s later)
 | 1 | `838` docked → `815…810` undocked | **Battery voltage, centivolts** (8.38 V = full 2S Li-ion on charger; sags to ~8.1 V off it). | strong |
 | 2 | `30` → spiked to `145` on wake → decayed to `52` | **Current tip temperature (°C)** — rose ~30 °C/300 ms while heating, then classic exponential cool-down. | **confirmed live** |
 | 3 | `2` docked, `5` woken-then-idle, `8` after `<L>` | Status code (see enum) — CHARGE / HIBERNATION / OFF all observed as expected. | **confirmed live** |
-| 4 | `0` | Live counter (took 90 values 0…89+ across the run) — likely an uptime/poll tick, not config | live counter |
+| 4 | `0` idle; `7→20→36→53→71→86→94→98→100` on heat-up; `~28–35` holding 350 °C | **Heater power, % (0–100)** — 0 docked/idle, soft-starts to 100 while heating, eases off near setpoint, ramps to 0 when the cartridge is pulled. (Earlier read as a "live counter".) | **strong (live 2026-10-09)** |
 | 5 | `350` | **Working setpoint (°C)** — moved by `<T340>`. Reads `390` in undocked-idle state (code 9) vs `350` docked (code 2) — the displayed setpoint depends on mode. | **confirmed live** |
 | 6 | `4` | ? | unknown |
 | 7 | `40`→`20`→`48` | **Sleep delay setting** — moved by `<D20>` then `<D48>` (field mirrors the command arg exactly). | **confirmed live (HCI)** |
@@ -110,6 +110,24 @@ curve (8.4 V ≈ 100 %, 7.4 V ≈ 30 %, 6.6 V ≈ 0 %). It's an estimate — vol
 reads high under charge and sags under load — so treat field 1 (voltage) as the
 authoritative reading and the % as an indicator. Calibrate the curve against the
 official app's displayed % at a known voltage if exactness is needed.
+
+### Tip-swap artifact (live capture 2026-10-09)
+
+`captures/2026-10-09-tipswap.tsv` (JBC_NANO, setpoint 350). Pulling or re-seating
+a cartridge opens the tip thermocouple. The firmware **slews** the reported tip
+value (field 2) toward/away from the open-circuit rail at **~1000 °C/s (~360 °C
+per 0.36 s frame)**, so junk values land anywhere between the real temperature and
+the rail. Real heat-up peaks around 160 °C/s.
+
+- **Pull** (heating, tip 297): one frame of `618` with status still WORK, then
+  status `1` NO CARTRIDGE with field 2 = `20`.
+- **Re-seat:** status back to WORK with `1551, 1551, 1185, 822, 465`, then `113`
+  (real), then normal heat-up.
+
+Clients filter this (`TipTrace` in `jbc_biron.py` / `Model.kt`): drop frames above
+setpoint + 10 °C or with NO CARTRIDGE, drop any frame moving faster than 500 °C/s
+vs the previous frame, and hold the graphed value within a 3 °C deadband (idle
+readings flicker ±1 °C).
 
 **Min temperature is not in the `<E>` frame.** Sending `<X150>` (min = 150 °C)
 produced no field change anywhere in the status reply — min-temp is either
