@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Build the JBC B·IRON Android app and (optionally) install it.
-# Last modified: 2026-07-24--1429
+# Last modified: 2026-10-09--0107
 #
 # Gradle can't build directly on the SMB/NAS path, so this mirrors the source
 # to a local dir, builds there with the Android Studio JBR (JDK 21), copies the
-# APK back to ./out, and installs to the connected phone.
+# APK back to ./out, and installs to the connected phone. Windows twin: build.ps1.
 #
 #   ./build.sh            # build + copy APK to ./out
 #   ./build.sh install    # build + install to the connected device via adb
@@ -21,7 +21,7 @@ mkdir -p "$BUILD"
 rsync -a --delete --exclude 'build/' --exclude '.gradle/' --exclude 'out/' "$SRC/" "$BUILD/"
 echo "sdk.dir=$SDK" > "$BUILD/local.properties"
 
-( cd "$BUILD" && "$GRADLE" :app:assembleDebug --no-daemon --console=plain )
+( cd "$BUILD" && "$GRADLE" :app:testDebugUnitTest :app:assembleDebug --no-daemon --console=plain )
 
 APK="$BUILD/app/build/outputs/apk/debug/app-debug.apk"
 mkdir -p "$SRC/out"

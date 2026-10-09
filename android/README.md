@@ -16,13 +16,32 @@ with no vertical scroll. Flow: scan → connect → live status → set-temp dia
 
 ## Build & install
 
-Gradle can't build on the SMB/NAS path, so `build.sh` mirrors the source to a
-local dir and builds there:
+Gradle can't build on the SMB/NAS path, so both scripts mirror the source to a
+local dir and build there. Every build runs the `ModelTest` unit tests first
+(`parseStatus` parity with `jbc_biron.py`).
 
+**Windows (Win10):**
+```powershell
+pwsh -NoProfile -File build.ps1 install   # build + install to the connected phone
+pwsh -NoProfile -File build.ps1           # build only; APK lands in .\out\
+```
+Mirror `%USERPROFILE%\builds\jbc-android`; JDK = Temurin 17 (or `JAVA_HOME`);
+Gradle 8.11.1 from `%USERPROFILE%\builds\tools` or the Gradle wrapper cache
+(downloaded once if missing); SDK `%LOCALAPPDATA%\Android\Sdk`. `install`
+auto-picks the single API-28+ phone on adb (skips non-Android gadgets like the
+Luckfox board) — pass `-Serial <id>` if more than one is attached.
+
+**Mac mini:**
 ```bash
 ./build.sh install     # build + install to the connected phone
 ./build.sh             # build only; APK lands in ./out/
 ```
+
+**Shared signing key.** `debug.keystore` (gitignored — public repo) is the Mac's
+`~/.android/debug.keystore`, used by both machines' debug builds so either can
+`adb install -r` over the other's APK without an uninstall (which would wipe the
+saved irons). Signer SHA-256 `9a0f7d51…e35355`. If it's missing, re-copy it:
+`scp macmini:.android/debug.keystore android/`.
 
 Prebuilt debug APK: `out/jbc-biron-debug.apk`.
 
@@ -30,15 +49,15 @@ Prebuilt debug APK: `out/jbc-biron-debug.apk`.
 
 | Piece | Version |
 |-------|---------|
-| Gradle | 8.11.1 (`~/Developer/tools/gradle-8.11.1`) |
+| Gradle | 8.11.1 (Mac `~/builds/tools/gradle-8.11.1`; Win wrapper cache) |
 | Android Gradle Plugin | 8.7.3 |
 | Kotlin | 2.0.21 (+ compose compiler plugin) |
 | Compose BOM | 2024.10.01 |
-| JDK | 21 — Android Studio JBR (`/Applications/Android Studio.app/Contents/jbr`) |
+| JDK | Mac: 21 — Android Studio JBR (`/Applications/Android Studio.app/Contents/jbr`) · Win: Temurin 17 |
 | compileSdk / targetSdk | 35 · minSdk 28 |
 
-Brew's OpenJDK 26 is too new for AGP — the build **must** use the JBR 21 that
-`build.sh` sets via `JAVA_HOME`.
+Brew's OpenJDK 26 is too new for AGP — the Mac build **must** use the JBR 21 that
+`build.sh` sets via `JAVA_HOME`. AGP 8.7.3 accepts JDK 17–21.
 
 ## Layout
 

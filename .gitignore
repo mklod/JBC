@@ -13,6 +13,11 @@ android/.gradle/
 local.properties
 *.apk
 *.iml
+# Shared debug signing key (copied from the Mac) — public repo, keep it out
+*.keystore
+*.jks
+# macOS AppleDouble junk that rsync/SMB leaves behind
+._*
 
 # Personal purchase records / shopping screenshots — NOT for a public repo
 *.pdf
