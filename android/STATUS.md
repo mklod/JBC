@@ -1,7 +1,27 @@
 # Android app — status & review log
 
-Newest first. Cross-session handoff (Windows CC ⇄ Mac mini CC). The Mac mini has
-the build toolchain (`build.sh`); the Windows box has the irons + web dashboard.
+Newest first. Cross-session handoff (Windows CC ⇄ Mac mini CC). **Both machines
+can build now:** Mac `build.sh`, Win10 `build.ps1` (since 2026-10-09). The
+Windows box also has the irons + web dashboard.
+
+---
+
+## 2026-10-09 (01:13) — Windows CC: Win10 build + tip-swap filter DONE
+
+- **The TODO below is implemented** (built on Win10, not waiting for the Mac):
+  `Model.kt` `TIP_MAX_PLAUSIBLE_C` + `IronStatus.tipValid`; `Ble.kt` appends to
+  history only when `tipValid`. **Mac CC: don't re-apply it.**
+- `build.ps1` = Windows twin of `build.sh` (mirror `%USERPROFILE%\builds\jbc-android`,
+  Temurin 17, Gradle 8.11.1 from the wrapper cache).
+- **Shared signing key:** `android/debug.keystore` (gitignored) is the Mac's
+  `~/.android/debug.keystore`; `app/build.gradle.kts` uses it for debug builds
+  when present. Both machines' APKs → signer `9a0f7d51…e35355`, so either can
+  `install -r` over the other without an uninstall (which wipes saved irons).
+- Both scripts now run `:app:testDebugUnitTest` first — `ModelTest` (5 tests,
+  `parseStatus` parity incl. the 1100 °C rejection). Verified green on both: Win10
+  locally, Mac via `ssh macmini ./build.sh`.
+- **Not installed on the phone yet** — the Moto X4 wasn't on USB. Next:
+  `pwsh -NoProfile -File build.ps1 install` with it plugged into the Windows box.
 
 ---
 

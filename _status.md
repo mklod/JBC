@@ -9,10 +9,26 @@ official app:
 1. **`jbc_biron.py`** — protocol library + CLI (scan/monitor/set-temp/on/off).
 2. **`dashboard.py`** — web dashboard (multi-iron, live graph, controls). **Primary
    daily driver on Windows.**
-3. **`android/`** — native Kotlin/Compose app (Mac-built), the portable phone app.
+3. **`android/`** — native Kotlin/Compose app, the portable phone app. Builds on
+   **Win10 (`build.ps1`) or the Mac (`build.sh`)**, same signing key either way.
 
 Protocol is fully reverse-engineered and live-verified. All three surfaces share
 the same command set + status-frame parsing.
+
+## Last session — 2026-10-09--0113 (Windows CC)
+- **Android app now builds on Win10.** `android/build.ps1` (twin of `build.sh`):
+  mirror `%USERPROFILE%\builds\jbc-android`, Temurin 17, Gradle 8.11.1 from the
+  wrapper cache, SDK `%LOCALAPPDATA%\Android\Sdk`. `install` auto-picks the
+  API-28+ phone (the Luckfox board also shows on adb; it's skipped).
+- **Shared debug key** `android/debug.keystore` (Mac's key, gitignored — repo is
+  public) used by both scripts → either machine can `install -r` over the other's
+  APK without wiping the saved irons. Signer `9a0f7d51…` verified on both builds.
+- **Android tip-swap filter landed** (`tipValid` in `Model.kt`, graph guard in
+  `Ble.kt`) + `ModelTest` (5 tests) gating every build. Green on Win10 + Mac.
+- `dashboard.py --raw-log PATH` captures raw frames. Live tip-swap test set up
+  (dashboard + capture to `captures/2026-10-09-tipswap.tsv`) — awaiting the
+  physical cartridge pull.
+- Not yet installed on the phone: the Moto X4 wasn't on USB this session.
 
 ## Last session — 2026-10-09--0054 (Windows CC)
 - **Fixed the tip-swap temperature spike on the live graph.** Pulling a cartridge
@@ -78,3 +94,6 @@ the same command set + status-frame parsing.
   status-only toggle reads as unresponsive.
 - Native Android app built on the **Mac** (`android/build.sh`, JBR 21); Windows
   runs the Python/web side. `android/STATUS.md` is the cross-machine channel.
+  **Update 2026-10-09:** Win10 builds it too (`android/build.ps1`); both sign with
+  the shared `android/debug.keystore` — never let either machine fall back to its
+  own debug key, or the next install forces an uninstall (loses saved irons).

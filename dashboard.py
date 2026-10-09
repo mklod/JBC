@@ -21,7 +21,7 @@ Each iron accepts only ONE BLE connection at a time: close the phone app first.
 A handle that is OFF and out of its cradle stops advertising and won't appear
 until it's docked or woken.
 """
-# Last modified: 2026-10-09--0118
+# Last modified: 2026-10-09--0113
 import argparse
 import asyncio
 import json

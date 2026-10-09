@@ -2,11 +2,28 @@
 
 ## TODO
 > [!tip] Queued for next build
-> - **Android: apply the tip-swap temperature filter** (mirror of the 2026-10-09 Windows fix) — add `TIP_MAX_PLAUSIBLE_C`/`tipValid` to `Model.kt` and guard the graph history append in `Ble.kt`. Details in `android/STATUS.md` (2026-10-09).
 > - Battery-% calibration: cross-check derived % against the official app at a known voltage; tune the SOC curve in `jbc_biron.py` / `Model.kt`.
 > - Confirm `<D{n}>` sleep-delay unit, then add a settable inactivity-timeout control.
 > - Android: landscape layout; reactive Bluetooth-on state; revert toggle on actual write failure (not just timeout).
 > - Optional: WORK-state HCI capture while soldering to decode remaining fields 6/9/13/16.
+
+## Build 2026-10-09--0113 — Windows CC: Win10 Android build + Android tip-swap filter
+### Changes
+- **Android app now builds on Win10.** New `android/build.ps1` (twin of `build.sh`): mirrors to `%USERPROFILE%\builds\jbc-android`, Temurin 17 + pinned Gradle 8.11.1 (from the wrapper cache), copies the APK to `android/out/`, `install` auto-picks the API-28+ phone on adb (ignores the Luckfox board that's also on adb).
+- **Shared debug signing key.** Both build scripts sign with `android/debug.keystore` (the Mac's debug key, gitignored because the repo is public), so a Windows build can `install -r` over the Mac-built app without an uninstall that would wipe the saved irons. Verified: Win-built and Mac-built APKs both carry signer `9a0f7d51…e35355`.
+- **Android tip-swap filter** (mirror of the 0054 Python fix): `Model.kt` gains `TIP_MAX_PLAUSIBLE_C` + `IronStatus.tipValid`; `Ble.kt` only appends trustworthy samples to the graph history.
+- **Unit tests gate every build:** `ModelTest` (5 tests) pins `parseStatus` parity with `jbc_biron.py`, including the 1100 °C / NO CARTRIDGE rejection. Green on Win10 and on the Mac (`build.sh` run over SSH).
+- `dashboard.py --raw-log PATH` records every raw BLE frame (TSV) for live captures such as the tip-swap test.
+> [!warning] Testing Checklist
+> - [x] `build.ps1` builds on Win10 (cold 78 s, incremental ~19 s); tests 5/5
+> - [x] `build.sh` still builds on the Mac with the shared key + test gate
+> - [x] APK signer matches the installed Mac build (`9a0f7d51…`)
+> - [ ] `build.ps1 install` onto the Moto X4 upgrades in place (saved irons survive) — phone wasn't on USB this session
+>   - Notes:
+> - [ ] Live tip swap: pull a cartridge, confirm the web graph stays flat; capture the real frame/status code
+>   - Notes:
+> - [ ] Same on the phone app after install
+>   - Notes:
 
 ## Build 2026-10-09--0054 — Windows CC: filter tip-swap temperature spike
 ### Changes
