@@ -15,12 +15,14 @@ Self-contained web page (no external assets, no CDN) at http://localhost:8770.
 
     pip install bleak
     python dashboard.py            # connect + serve, open the URL it prints
+    python dashboard.py --raw-log frames.tsv   # also record every raw BLE frame
 
 Each iron accepts only ONE BLE connection at a time: close the phone app first.
 A handle that is OFF and out of its cradle stops advertising and won't appear
 until it's docked or woken.
 """
-# Last modified: 2026-10-09--0054
+# Last modified: 2026-10-09--0118
+import argparse
 import asyncio
 import json
 import threading
@@ -44,6 +46,16 @@ _devices = {}                  # addr -> {name, connected, last, history, error}
 _senders = {}                  # addr -> Sender (only while connected)
 _connecting = set()            # addrs with a live connect task
 _loop = None
+_raw_log = None                # open file when --raw-log is given
+
+
+def log_raw(addr, name, text):
+    """Append one raw notify frame (diagnostics, e.g. capturing a tip swap)."""
+    if _raw_log is None:
+        return
+    with _lock:
+        _raw_log.write(f"{time.time():.3f}\t{addr}\t{name}\t{text}\n")
+        _raw_log.flush()
 
 
 class Sender:
@@ -86,6 +98,7 @@ async def device_loop(dev, name):
 
                     def on_notify(_c, data: bytearray):
                         text = data.decode("utf-8", "replace").strip()
+                        log_raw(addr, name, text)
                         if text.startswith("E"):
                             st = parse_status(text)
                             with _lock:
@@ -428,6 +441,14 @@ setInterval(poll, 500); poll();
 
 
 def main():
+    global _raw_log
+    ap = argparse.ArgumentParser(description="JBC B·IRON live web dashboard")
+    ap.add_argument("--raw-log", metavar="PATH",
+                    help="append every raw BLE frame (epoch, addr, name, frame) as TSV")
+    args = ap.parse_args()
+    if args.raw_log:
+        _raw_log = open(args.raw_log, "a", encoding="utf-8")
+        print(f"Logging raw frames -> {args.raw_log}")
     print("Scanning + connecting to JBC irons (close the phone app first) …")
     start_ble_thread()
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
