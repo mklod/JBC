@@ -2,11 +2,24 @@
 
 ## TODO
 > [!tip] Queued for next build
-> - **Android BUG (high): scanner dies on screen-off, never resumes → both cards go "offline" and toggle is disabled after the phone sleeps.** Fix: lifecycle-aware scan (restart on onStart/onResume) + add a ScanFilter + reconnect dead persistent conns. Full diagnosis in `android/STATUS.md` (2026-07-24 afternoon). Workaround: reopen the app.
+> - **Android: apply the tip-swap temperature filter** (mirror of the 2026-10-09 Windows fix) — add `TIP_MAX_PLAUSIBLE_C`/`tipValid` to `Model.kt` and guard the graph history append in `Ble.kt`. Details in `android/STATUS.md` (2026-10-09).
 > - Battery-% calibration: cross-check derived % against the official app at a known voltage; tune the SOC curve in `jbc_biron.py` / `Model.kt`.
 > - Confirm `<D{n}>` sleep-delay unit, then add a settable inactivity-timeout control.
 > - Android: landscape layout; reactive Bluetooth-on state; revert toggle on actual write failure (not just timeout).
 > - Optional: WORK-state HCI capture while soldering to decode remaining fields 6/9/13/16.
+
+## Build 2026-10-09--0054 — Windows CC: filter tip-swap temperature spike
+### Changes
+- **Live graph no longer spikes to ~1100 °C during a cartridge/tip swap.** Pulling the cartridge opens the tip thermocouple, which reads a rail value; the firmware passes it through in status field 2.
+- `jbc_biron.py`: added `TIP_MAX_PLAUSIBLE_C = 500`; `parse_status()` now returns a `tip_valid` flag (`current ≤ 500 AND status != NO CARTRIDGE`).
+- `dashboard.py`: the web graph only records a sample when `tip_valid` — the line holds flat across the swap instead of spiking.
+- Logged the matching Android fix for the next Mac build (`android/STATUS.md`).
+> [!warning] Testing Checklist
+> - [x] Unit-verified: 1100 rejected (NO-CARTRIDGE and WORK status), 450/340/28 kept
+> - [ ] Live end-to-end: pull a cartridge on a real iron, confirm the web graph stays flat (no 1100 spike)
+>   - Notes:
+> - [ ] Android build picks up the same filter and verified on device
+>   - Notes:
 
 ## Build 2026-07-27--1753 — Mac CC: fix scanner dies on screen-off (won't reconnect)
 ### Changes

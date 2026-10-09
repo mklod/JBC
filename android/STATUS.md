@@ -5,6 +5,31 @@ the build toolchain (`build.sh`); the Windows box has the irons + web dashboard.
 
 ---
 
+## 2026-10-09 — Windows CC: TODO — filter tip-swap temperature spike (graph)
+
+**User report:** switching a soldering-iron cartridge shows a brief **~1100 °C**
+on the live temp graph. Root cause: pulling the cartridge opens the tip
+thermocouple, which reads a rail value; the firmware passes that straight through
+in status field 2 (and status likely flips to `NO CARTRIDGE`, code 1). Work range
+tops at 450 °C, so anything above ~500 is a sensor artifact, not a temperature.
+
+**Fixed on the Windows side** (`jbc_biron.py` + `dashboard.py`, committed): added
+`TIP_MAX_PLAUSIBLE_C = 500`; `parse_status()` now returns a `tip_valid` flag
+(`current ≤ 500 AND status != NO CARTRIDGE`); the web graph only appends a sample
+when `tip_valid`. Unit-verified: 1100 rejected (both NO-CARTRIDGE and WORK
+status), 450/340/28 kept.
+
+**Apply the same to the Android app (1:1):**
+1. `Model.kt` — add `const val TIP_MAX_PLAUSIBLE_C = 500`; add `val tipValid: Boolean`
+   to `IronStatus`, computed in `parseStatus`:
+   `tipValid = currentC != null && currentC <= TIP_MAX_PLAUSIBLE_C && status != "NO CARTRIDGE"`.
+2. `Ble.kt` `onCharacteristicChanged` — guard the history append with
+   `if (st.tipValid)` instead of `if (st.currentC != null)`. (Leave the tile/last
+   status as-is; only the graph history must skip the artifact.)
+   Net effect: the graph line holds flat across the swap instead of spiking to 1100.
+
+---
+
 ## 2026-07-27 — Mac CC: scan-lifecycle fix — screen-off bug FIXED + verified
 
 Fixed the scanner-dies-on-screen-off bug from the Windows entry below. Built,

@@ -20,6 +20,7 @@ Each iron accepts only ONE BLE connection at a time: close the phone app first.
 A handle that is OFF and out of its cradle stops advertising and won't appear
 until it's docked or woken.
 """
+# Last modified: 2026-10-09--0054
 import asyncio
 import json
 import threading
@@ -90,7 +91,10 @@ async def device_loop(dev, name):
                             with _lock:
                                 rec = _devices[addr]
                                 rec["last"] = st
-                                if st and st.get("current_c") is not None:
+                                # Only graph a trustworthy tip reading — a
+                                # cartridge swap opens the thermocouple (~1100 °C
+                                # rail value) and would spike the chart.
+                                if st and st.get("tip_valid"):
                                     rec["history"].append((time.time(), st["current_c"]))
 
                     await client.start_notify(NOTIFY_CHAR, on_notify)

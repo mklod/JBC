@@ -12,6 +12,7 @@ Cross-platform via bleak (macOS/Linux/Windows).
     python jbc_biron.py on
     python jbc_biron.py off
 """
+# Last modified: 2026-10-09--0054
 import asyncio
 import sys
 
@@ -71,6 +72,13 @@ def battery_pct_from_voltage(pack_v):
     return 100
 
 
+# Pulling the cartridge (or a bad re-seat during a tip swap) opens the tip
+# thermocouple, which reads a rail value (~1100 °C). The iron's work range tops
+# out at 450 °C, so any reading above this ceiling is a sensor artifact, not a
+# real temperature — callers drop it from the live graph so it doesn't spike.
+TIP_MAX_PLAUSIBLE_C = 500
+
+
 def parse_status(text):
     f = text.split(";")
     if not f or f[0] != "E":
@@ -86,8 +94,17 @@ def parse_status(text):
     # (moved by <T…>), field 2 is tip temperature, field 1 is battery
     # voltage in centivolts (8.38 V docked/full).
     batt = num(1)
+    current = num(2)
+    status = STATUS.get(num(3), f"?{f[3] if len(f) > 3 else ''}")
+    # Is the tip reading trustworthy for the graph? False during a cartridge
+    # swap (open thermocouple → rail value, and/or NO CARTRIDGE status).
+    tip_valid = (
+        current is not None
+        and current <= TIP_MAX_PLAUSIBLE_C
+        and status != "NO CARTRIDGE"
+    )
     return {
-        "current_c": num(2),
+        "current_c": current,
         "setpoint_c": num(5),
         "max_c": num(17),          # confirmed via <I450> (HCI capture)
         "sleep_delay": num(7),     # confirmed via <D20>/<D48> (HCI capture)
@@ -96,7 +113,8 @@ def parse_status(text):
         # they are NOT the percentage — the app computes it from voltage.
         "battery_pct": battery_pct_from_voltage(batt / 100 if batt is not None else None),
         "countdown_s": (num(10) or 0) // 4,
-        "status": STATUS.get(num(3), f"?{f[3] if len(f) > 3 else ''}"),
+        "status": status,
+        "tip_valid": tip_valid,
         "locked": len(f) > 12 and f[12] == "1",
     }
 

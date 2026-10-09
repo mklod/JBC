@@ -14,6 +14,14 @@ official app:
 Protocol is fully reverse-engineered and live-verified. All three surfaces share
 the same command set + status-frame parsing.
 
+## Last session — 2026-10-09--0054 (Windows CC)
+- **Fixed the tip-swap temperature spike on the live graph.** Pulling a cartridge
+  opens the tip thermocouple → field 2 reads a rail value (~1100 °C), spiking the
+  chart. Added `TIP_MAX_PLAUSIBLE_C = 500` + a `tip_valid` flag in
+  `parse_status()` (reject > 500 °C or NO CARTRIDGE); web graph only records
+  trustworthy samples. Unit-verified. Mirror fix for Android logged in
+  `android/STATUS.md` (for the next Mac build). Committed + pushed.
+
 ## Last session — 2026-07-27--1753 (Mac CC)
 - **Fixed the screen-off scan bug** (Windows-reported): app came back "offline",
   toggle unresponsive because the unfiltered `startScan()` (once in `onCreate`)
