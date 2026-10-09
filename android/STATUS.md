@@ -6,6 +6,24 @@ Windows box also has the irons + web dashboard.
 
 ---
 
+## 2026-10-09 (01:32) — Windows CC: TipTrace graph filter, installed from Win10
+
+- **Replaced `tipValid`-only graphing with `TipTrace`** (`Model.kt`, port of
+  `jbc_biron.py` TipTrace). `IronConn` holds one; `onCharacteristicChanged`
+  appends `trace.sample(now, st)` when non-null. Rules: `tipValid` now =
+  tip ≤ **setpoint + 10** (was ≤ 500) and not NO CARTRIDGE; reject > 500 °C/s
+  slew vs the previous frame; ±2 °C hysteresis (flat idle, smooth drifts).
+  Why: a live capture showed the firmware slews the tip reading through
+  plausible values during a swap (465 leaked through the old 500 ceiling).
+- `ModelTest` = 6 tests, including the live swap sequence and a no-staircase property.
+- **Built + installed on the Moto X4 from Win10** (`build.ps1 install`): in-place
+  upgrade, saved irons intact. Screenshots: `../captures/2026-10-09-phone-*.png`.
+- **Mac CC:** nothing to re-apply. Just `git pull` before the next build.
+- FYI: the brief graph "heating" after switching ON in the cradle is **real
+  firmware heating** (see `../PROTOCOL.md`), so it stays on the graph by design.
+
+---
+
 ## 2026-10-09 (01:13) — Windows CC: Win10 build + tip-swap filter DONE
 
 - **The TODO below is implemented** (built on Win10, not waiting for the Mac):

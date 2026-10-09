@@ -12,7 +12,9 @@ native Android app.
 - **Python:** `bleak` (WinRT/CoreBluetooth/BlueZ). `jbc_biron.py` + `dashboard.py`
   (stdlib HTTP, no extra deps).
 - **Android:** Kotlin, Jetpack Compose, min SDK 28 / target 35. Built on Mac
-  (Gradle 8.11.1, AGP 8.7.3, JBR 21) via `android/build.sh`.
+  (Gradle 8.11.1, AGP 8.7.3, JBR 21) via `android/build.sh`, or on Win10
+  (Temurin 17) via `android/build.ps1`. Both sign with the shared, gitignored
+  `android/debug.keystore`.
 
 ## Key files
 - `jbc_biron.py` — protocol library + CLI. `parse_status()` is the source of truth.
@@ -42,3 +44,4 @@ native Android app.
 - Exact battery-% curve (needs official-app cross-reference).
 - `<D{n}>` sleep-delay unit (seconds? minutes? ¼-s ticks?).
 - Remaining status-frame fields 6/9/13/16 (need a WORK-state capture while soldering).
+  Field 4 resolved 2026-10-09: heater power %.

@@ -15,6 +15,23 @@ official app:
 Protocol is fully reverse-engineered and live-verified. All three surfaces share
 the same command set + status-frame parsing.
 
+## Last session — 2026-10-09--0132 (Windows CC, same session continued)
+- **Live tip-swap captured** (web dashboard `--raw-log`). Firmware SLEWS the tip
+  reading toward/away from the open-thermocouple rail at ~1000 °C/s: pull = one
+  618 frame then NO CARTRIDGE @ 20; re-seat = 1551/1551/1185/822/465 tail. The
+  500 °C ceiling leaked 465 onto the graph.
+- **New `TipTrace` graph filter** (Python + Kotlin, 1:1): ceiling = setpoint +
+  10 °C, reject > 500 °C/s slews, ±2 °C hysteresis → idle flicker plots
+  perfectly flat (user request), slow drifts stay smooth (a 3 °C deadband was
+  tried first; it staircased cooling). Verified live on web (swap #2: graph max
+  350, all artifacts dropped) and on the phone (flat idle, smooth cooling).
+  12 tests replay the real captures.
+- **Installed on the Moto X4 from Win10** — upgraded in place, saved irons kept.
+- **Protocol:** field 4 = **heater power %**. **Switching ON while docked is a
+  real ~3 s heat burst** (WORK at up to 97 % power before cradle detection, tip
+  overshoots to ~308 °C). That answers the user's "graph heats briefly" report:
+  firmware behavior, not an app bug.
+
 ## Last session — 2026-10-09--0113 (Windows CC)
 - **Android app now builds on Win10.** `android/build.ps1` (twin of `build.sh`):
   mirror `%USERPROFILE%\builds\jbc-android`, Temurin 17, Gradle 8.11.1 from the
@@ -72,6 +89,10 @@ the same command set + status-frame parsing.
   project previously had none — used `HANDOFF.md` + `android/STATUS.md` only).
 
 ## Next immediate task
+- Phone: one live cartridge swap on the new build (graph ≤ setpoint, no spike);
+  web + unit tests already pass.
+- Mac CC: `git pull` + `./build.sh` once to confirm the 2026-10-09 Kotlin changes
+  build there (Win10-built + installed already).
 - Battery-% calibration: current % is estimated from pack voltage (fields 14/18
   are constant 100, not the real %). Cross-check against the official app's
   displayed % at a known voltage to tune the SOC curve.
