@@ -1,4 +1,5 @@
 package dev.mklod.jbcbiron
+// Last modified: 2026-10-09--0107
 
 /**
  * JBC B·IRON status frame parsing — a direct port of the live-verified
@@ -21,6 +22,11 @@ val STATUS = mapOf(
     8 to "OFF", 9 to "OFF", 10 to "COVER",
 )
 
+// Pulling the cartridge (or a bad re-seat during a tip swap) opens the tip
+// thermocouple, which reads a rail value (~1100 °C). The work range tops out at
+// 450 °C, so anything above this is a sensor artifact — kept off the live graph.
+const val TIP_MAX_PLAUSIBLE_C = 500
+
 // Everything except a literal OFF counts as "on" for the master toggle.
 private val OFF_STATES = setOf("OFF")
 
@@ -34,6 +40,9 @@ data class IronStatus(
     val countdownS: Int?,
     val status: String,
     val locked: Boolean,
+    // Is the tip reading trustworthy for the graph? False during a cartridge
+    // swap (open thermocouple → rail value, and/or NO CARTRIDGE status).
+    val tipValid: Boolean,
 ) {
     val isOn: Boolean get() = status !in OFF_STATES
 }
@@ -75,15 +84,18 @@ fun parseStatus(text: String): IronStatus? {
 
     val battRaw = num(1)
     val battV = battRaw?.let { it / 100.0 }
+    val current = num(2)
+    val status = STATUS[num(3)] ?: "?"
     return IronStatus(
-        currentC = num(2),
+        currentC = current,
         setpointC = num(5),
         maxC = num(17),
         sleepDelay = num(7),
         batteryV = battV,
         batteryPct = batteryPctFromVoltage(battV),
         countdownS = num(10)?.let { it / 4 },
-        status = STATUS[num(3)] ?: "?",
+        status = status,
         locked = f.getOrNull(12) == "1",
+        tipValid = current != null && current <= TIP_MAX_PLAUSIBLE_C && status != "NO CARTRIDGE",
     )
 }

@@ -1,4 +1,5 @@
 package dev.mklod.jbcbiron
+// Last modified: 2026-10-09--0107
 
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
@@ -267,10 +268,13 @@ private class IronConn(
             if (!text.startsWith("E")) return
             val st = parseStatus(text) ?: return
             status = st
-            if (st.currentC != null) {
+            // Only graph a trustworthy tip reading — a cartridge swap opens the
+            // thermocouple (~1100 °C rail value) and would spike the chart.
+            val tip = st.currentC
+            if (st.tipValid && tip != null) {
                 synchronized(history) {
                     val now = System.currentTimeMillis()
-                    history.addLast(now to st.currentC)
+                    history.addLast(now to tip)
                     while (history.isNotEmpty() && now - history.first().first > HISTORY_MS) {
                         history.removeFirst()
                     }
