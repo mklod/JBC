@@ -1,5 +1,5 @@
 package dev.mklod.jbcbiron
-// Last modified: 2026-10-09--0119
+// Last modified: 2026-10-09--0127
 
 /**
  * JBC B·IRON status frame parsing — a direct port of the live-verified
@@ -33,10 +33,12 @@ val STATUS = mapOf(
 const val TIP_OVERSHOOT_C = 10
 // Real heat-up peaks ~160 °C/s; the artifact slew is ~1000 °C/s.
 const val TIP_MAX_SLEW_C_PER_S = 500
-// Idle readings flicker by ±1 °C (26/27/28 at room temp). The graph holds its
-// value until the reading moves at least this far, so idle and at-setpoint lines
-// plot flat; at heat-up rates (~20 °C/frame) the lag is invisible.
-const val TIP_DEADBAND_C = 3
+// Idle readings flicker by ±1 °C (26/27/28 at room temp; 347-351 holding 350).
+// The plotted value only moves once the reading leaves a ±band around it, then
+// trails it by the band: flicker plots flat, while slow drifts (cooling in the
+// cradle) still move in smooth 1 °C steps — a plain deadband staircases them.
+// Lag ≤ 2 °C, invisible at heat-up rates.
+const val TIP_HYSTERESIS_C = 2
 const val FALLBACK_MAX_C = 450   // work-range top, if the frame lacks a setpoint
 
 // Everything except a literal OFF counts as "on" for the master toggle.
@@ -122,8 +124,8 @@ fun parseStatus(text: String): IronStatus? {
  * jbc_biron.py TipTrace). [sample] returns the °C value to plot, or null to skip
  * the frame: drops implausible frames ([IronStatus.tipValid]), drops the
  * firmware's artifact slew (faster than [TIP_MAX_SLEW_C_PER_S] vs the previous
- * raw frame, valid or not), then holds the value inside [TIP_DEADBAND_C] so idle
- * noise plots flat.
+ * raw frame, valid or not), then applies [TIP_HYSTERESIS_C] so idle noise plots
+ * flat.
  */
 class TipTrace {
     private var prevT = 0L          // epoch ms of the previous frame
@@ -142,7 +144,12 @@ class TipTrace {
             if (Math.abs(raw - pRaw) / dtS > TIP_MAX_SLEW_C_PER_S) return null
         }
         val h = held
-        if (h == null || Math.abs(raw - h) >= TIP_DEADBAND_C) held = raw
+        held = when {
+            h == null -> raw
+            raw > h + TIP_HYSTERESIS_C -> raw - TIP_HYSTERESIS_C
+            raw < h - TIP_HYSTERESIS_C -> raw + TIP_HYSTERESIS_C
+            else -> h
+        }
         return held
     }
 }

@@ -126,8 +126,20 @@ the rail. Real heat-up peaks around 160 °C/s.
 
 Clients filter this (`TipTrace` in `jbc_biron.py` / `Model.kt`): drop frames above
 setpoint + 10 °C or with NO CARTRIDGE, drop any frame moving faster than 500 °C/s
-vs the previous frame, and hold the graphed value within a 3 °C deadband (idle
+vs the previous frame, and plot through a ±2 °C hysteresis band (idle
 readings flicker ±1 °C).
+
+### Power-on while docked = real ~3 s heat burst (live capture 2026-10-09)
+
+`captures/2026-10-09-offon.tsv` / `.png` (JBC_NANO, docked, setpoint 350): `<L>`
+then `<M>` without touching the iron. For **~3 s after `<M>` the firmware reports
+WORK (code 0) and heats** (field 4 power 5→17→32→49→66→84→93→97 %, tip 31→225 °C),
+then flips to CHARGE (code 2), ramps power to 0, and the tip overshoots to
+**~308 °C** before cooling normally (~1 min to <100 °C). Real heat, not a sensor
+artifact (field 4 proves the heater ran). Likely cause (unconfirmed): OFF also
+disables charging, and the iron detects its cradle via charge current, so it needs
+a few seconds after power-on to see the dock. Clients plot it as-is.
+Possibly related: the undocked "145 °C on wake" burst in the field table above.
 
 **Min temperature is not in the `<E>` frame.** Sending `<X150>` (min = 150 °C)
 produced no field change anywhere in the status reply — min-temp is either

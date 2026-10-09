@@ -1,5 +1,5 @@
 package dev.mklod.jbcbiron
-// Last modified: 2026-10-09--0119
+// Last modified: 2026-10-09--0127
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -57,9 +57,20 @@ class ModelTest {
             134 to 0, 153 to 0, 172 to 0, 191 to 0,          // real heat-up
         )
         val out = replay(seq)
-        assertEquals(listOf(224, 260, 297), out.subList(0, 3))
+        assertEquals(listOf(224, 258, 295), out.subList(0, 3))   // trails raw by ≤2 (hysteresis)
         out.subList(3, 13).forEach { assertNull(it) }       // 618 … 113 all dropped
-        assertEquals(listOf(134, 153, 172, 191), out.subList(13, 17))
+        assertEquals(listOf(136, 151, 170, 189), out.subList(13, 17))
+    }
+
+    // A plain deadband staircases slow drifts (cooling in the cradle): it sits
+    // still, then leaps. Hysteresis never moves the plot further than the reading.
+    @Test fun slowDriftHasNoStaircase() {
+        val raw = listOf(60, 59, 60, 58, 59, 57, 58, 56, 57, 55, 56, 54, 53, 52, 51, 50)
+        val out = replay(raw.map { it to 2 })
+        for (i in 1 until raw.size) {
+            assertTrue("step $i", Math.abs(out[i]!! - out[i - 1]!!) <= Math.abs(raw[i] - raw[i - 1]))
+        }
+        assertTrue(Math.abs(out.last()!! - raw.last()) <= TIP_HYSTERESIS_C)
     }
 
     // Live capture 2026-10-09, JBC_Std OFF at room temp: raw flickers 26/27/28.

@@ -12,7 +12,7 @@ Cross-platform via bleak (macOS/Linux/Windows).
     python jbc_biron.py on
     python jbc_biron.py off
 """
-# Last modified: 2026-10-09--0119
+# Last modified: 2026-10-09--0127
 import asyncio
 import sys
 
@@ -84,10 +84,12 @@ def battery_pct_from_voltage(pack_v):
 TIP_OVERSHOOT_C = 10
 # Real heat-up peaks ~160 °C/s; the artifact slew is ~1000 °C/s.
 TIP_MAX_SLEW_C_PER_S = 500
-# Idle readings flicker by ±1 °C (26/27/28 at room temp). The graph holds its
-# value until the reading moves at least this far, so idle and at-setpoint
-# lines plot flat; at heat-up rates (~20 °C/frame) the lag is invisible.
-TIP_DEADBAND_C = 3
+# Idle readings flicker by ±1 °C (26/27/28 at room temp; 347-351 holding 350).
+# The plotted value only moves once the reading leaves a ±band around it, then
+# trails it by the band: flicker plots flat, while slow drifts (cooling in the
+# cradle) still move in smooth 1 °C steps — a plain deadband staircases them.
+# Lag ≤ 2 °C, invisible at heat-up rates.
+TIP_HYSTERESIS_C = 2
 FALLBACK_MAX_C = 450           # work-range top, if the frame lacks a setpoint
 
 
@@ -140,8 +142,7 @@ class TipTrace:
     sample() returns the °C value to plot, or None to skip the frame. It drops
     implausible frames (parse_status tip_valid), drops the firmware's artifact
     slew (moving faster than TIP_MAX_SLEW_C_PER_S vs the previous raw frame,
-    valid or not), then holds the value inside TIP_DEADBAND_C so idle noise
-    plots flat.
+    valid or not), then applies TIP_HYSTERESIS_C so idle noise plots flat.
     """
 
     def __init__(self):
@@ -159,8 +160,12 @@ class TipTrace:
             dt = max(t - prev[0], 0.1)
             if abs(raw - prev[1]) / dt > TIP_MAX_SLEW_C_PER_S:
                 return None
-        if self._held is None or abs(raw - self._held) >= TIP_DEADBAND_C:
+        if self._held is None:
             self._held = raw
+        elif raw > self._held + TIP_HYSTERESIS_C:
+            self._held = raw - TIP_HYSTERESIS_C
+        elif raw < self._held - TIP_HYSTERESIS_C:
+            self._held = raw + TIP_HYSTERESIS_C
         return self._held
 
 

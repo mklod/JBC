@@ -8,7 +8,7 @@ lifted, heated, cartridge pulled and re-seated (artifact frames 618, then
 1551/1551/1185/822/465), heated back to its 350 °C setpoint, re-docked.
 JBC_Std sat OFF at room temperature the whole time (26/27/28 flicker).
 """
-# Last modified: 2026-10-09--0119
+# Last modified: 2026-10-09--0127
 import csv
 import os
 import unittest
@@ -58,9 +58,19 @@ class ReplayTest(unittest.TestCase):
         self.assertFalse([v for _, _, s, v in rows if s == "NO CARTRIDGE" and v is not None])
 
     def test_real_heatup_is_kept(self):
-        plotted = {v for *_, v in replay("JBC_NANO") if v is not None}
+        rows = replay("JBC_NANO")
         for real in (134, 153, 172, 191, 210, 229, 249, 269, 288, 307):   # post-swap heat-up
-            self.assertIn(real, plotted)
+            v = next(v for _, r, _, v in rows if r == real)
+            self.assertIsNotNone(v, real)
+            self.assertLessEqual(abs(v - real), 2, real)        # hysteresis lag only
+
+    def test_plot_never_jumps_further_than_the_reading(self):
+        # A plain deadband staircases slow drifts (e.g. cooling in the cradle):
+        # the plot sits still, then leaps. Hysteresis never moves more than raw did.
+        for name in ("JBC_NANO", "JBC_Std"):
+            kept = [(r, v) for _, r, _, v in replay(name) if v is not None]
+            for (r0, v0), (r1, v1) in zip(kept, kept[1:]):
+                self.assertLessEqual(abs(v1 - v0), abs(r1 - r0), (name, r0, r1, v0, v1))
 
     def test_idle_room_temp_plots_flat(self):
         rows = replay("JBC_Std")
